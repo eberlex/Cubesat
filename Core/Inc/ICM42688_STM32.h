@@ -23,9 +23,9 @@
 #include <stdint.h>
 
 /* ---------------- Configuracao de hardware (fiacao fixa da placa) ---------------- */
-#define ICM42688_SPI_HANDLE        hspi1
+#define ICM42688_SPI_HANDLE        hspi2
 #define ICM42688_CS_GPIO_Port      GPIOB
-#define ICM42688_CS_Pin            GPIO_PIN_0
+#define ICM42688_CS_Pin            GPIO_PIN_11
 
 /* ---------------- Registradores (Bank 0) ---------------- */
 #define ICM42688_REG_DEVICE_CONFIG     0x11
