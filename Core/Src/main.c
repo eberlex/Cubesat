@@ -12,7 +12,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "BMI323_STM32.h"
-#include "BMI323_STM32_I2C.h"   /* driver de DIAGNOSTICO via I2C4 - temporario */
 #include "ms5611.h"
 #include "bme68x_app.h"
 #include <string.h>
@@ -45,8 +44,7 @@ UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 float temperature_ms5611, pressure_ms5611;
-BMI323_Data imu_data;              /* dado lido via SPI2 (driver definitivo) */
-BMI323_I2C_Data imu_data_i2c;      /* dado lido via I2C4 (driver de teste)   */
+BMI323_Data imu_data;
 BME68X_Data bme68x_data;
 uint32_t led_last_toggle = 0;
 /* USER CODE END PV */
@@ -147,8 +145,7 @@ int main(void)
   }
 
   /* -------------------------------- BMI323 -------------------------------- */
-  uint8_t bmi_status = BMI323_Init();                       /* driver definitivo, via SPI2 */
-  //uint8_t bmi_status = BMI323_I2C_Init(&hi2c4);           /* TESTE: driver de diagnostico via I2C4 */
+  uint8_t bmi_status = BMI323_Init();
 
   sprintf(buffer, "BMI323_Init() retornou: %d\r\n", bmi_status);
   HAL_UART_Transmit(&huart4, (uint8_t *)buffer, strlen(buffer), 100);
@@ -188,8 +185,7 @@ int main(void)
     HAL_UART_Transmit(&huart4, (uint8_t *)buffer, strlen(buffer), 100);
 
     /* ---------------- Leitura do BMI323 ---------------- */
-    if (BMI323_ReadData(&imu_data) == 0)                    /* driver definitivo, via SPI2 */
-    //if (BMI323_I2C_ReadData(&hi2c4, &imu_data_i2c) == 0)  /* TESTE: driver de diagnostico via I2C4 */
+    if (BMI323_ReadData(&imu_data) == 0)
     {
       sprintf(buffer, "BMI323  -> Accel[g]: X=%.3f Y=%.3f Z=%.3f | Gyro[dps]: X=%.2f Y=%.2f Z=%.2f | Temp=%.1fC\r\n",
               imu_data.accel_x_g, imu_data.accel_y_g, imu_data.accel_z_g,
