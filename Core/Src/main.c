@@ -12,6 +12,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "BMI323_STM32.h"
+#include "BMI323_STM32_I2C.h"   /* driver de DIAGNOSTICO via I2C4 - temporario */
 #include "ms5611.h"
 #include "bme68x_app.h"
 #include <string.h>
@@ -36,7 +37,6 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
-I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c4;
 
 SPI_HandleTypeDef hspi2;
@@ -45,7 +45,8 @@ UART_HandleTypeDef huart4;
 
 /* USER CODE BEGIN PV */
 float temperature_ms5611, pressure_ms5611;
-BMI323_Data imu_data;
+BMI323_Data imu_data;              /* dado lido via SPI2 (driver definitivo) */
+BMI323_I2C_Data imu_data_i2c;      /* dado lido via I2C4 (driver de teste)   */
 BME68X_Data bme68x_data;
 uint32_t led_last_toggle = 0;
 /* USER CODE END PV */
@@ -55,7 +56,6 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_I2C1_Init(void);
 static void MX_I2C4_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_UART4_Init(void);
@@ -127,28 +127,28 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
-  MX_I2C1_Init();
   MX_I2C4_Init();
   MX_SPI2_Init();
   MX_UART4_Init();
   /* USER CODE BEGIN 2 */
   char buffer[128];
 
-  /* Scan de dispositivos I2C no barramento 1 */
-  I2C_Scanner(&hi2c1);
+  /* Scan de dispositivos I2C no barramento 4 */
+  I2C_Scanner(&hi2c4);
 
   /* ------------------------------- MS5611 ------------------------------- */
-  MS5611_Init(&hi2c1, 1); /* teste: 1 = formula MS5607. Se a pressao ficar certa, mantenha assim; se piorar, volte para 0 */
+  MS5611_Init(&hi2c4, 1); /* teste: 1 = formula MS5607. Se a pressao ficar certa, mantenha assim; se piorar, volte para 0 */
 
   /* ------------------------------- BME68X ------------------------------- */
-  if (BME68X_App_Init(&hi2c1) != BME68X_OK) 
+  if (BME68X_App_Init(&hi2c4) != BME68X_OK) 
   {
       sprintf(buffer, "Erro ao inicializar BME68X!\r\n");
       HAL_UART_Transmit(&huart4, (uint8_t *)buffer, strlen(buffer), 100);
   }
 
   /* -------------------------------- BMI323 -------------------------------- */
-  uint8_t bmi_status = BMI323_Init();
+  uint8_t bmi_status = BMI323_Init();                       /* driver definitivo, via SPI2 */
+  //uint8_t bmi_status = BMI323_I2C_Init(&hi2c4);           /* TESTE: driver de diagnostico via I2C4 */
 
   sprintf(buffer, "BMI323_Init() retornou: %d\r\n", bmi_status);
   HAL_UART_Transmit(&huart4, (uint8_t *)buffer, strlen(buffer), 100);
@@ -182,13 +182,14 @@ int main(void)
     }
 
     /* ---------------- Leitura do MS5611 ---------------- */
-    MS5611_Measure(&hi2c1, &temperature_ms5611, &pressure_ms5611);
+    MS5611_Measure(&hi2c4, &temperature_ms5611, &pressure_ms5611);
     sprintf(buffer, "MS5611  -> Temp: %.2f C | Press: %.2f hPa\r\n", 
             temperature_ms5611, pressure_ms5611 / 100.0f);
     HAL_UART_Transmit(&huart4, (uint8_t *)buffer, strlen(buffer), 100);
 
     /* ---------------- Leitura do BMI323 ---------------- */
-    if (BMI323_ReadData(&imu_data) == 0)
+    if (BMI323_ReadData(&imu_data) == 0)                    /* driver definitivo, via SPI2 */
+    //if (BMI323_I2C_ReadData(&hi2c4, &imu_data_i2c) == 0)  /* TESTE: driver de diagnostico via I2C4 */
     {
       sprintf(buffer, "BMI323  -> Accel[g]: X=%.3f Y=%.3f Z=%.3f | Gyro[dps]: X=%.2f Y=%.2f Z=%.2f | Temp=%.1fC\r\n",
               imu_data.accel_x_g, imu_data.accel_y_g, imu_data.accel_z_g,
@@ -334,54 +335,6 @@ static void MX_ADC1_Init(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x307075B1;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
   * @brief I2C4 Initialization Function
   * @param None
   * @retval None
@@ -451,22 +404,22 @@ static void MX_SPI2_Init(void)
   hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.NSS = SPI_NSS_SOFT;                 /* <-- revertido: CS manual via GPIO (PB12) */
   hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi2.Init.CRCPolynomial = 0x0;
   hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-  hspi2.Init.NSSPolarity = SPI_NSS_POLARITY_HIGH;
+  hspi2.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
   hspi2.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
   hspi2.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
   hspi2.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
   hspi2.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   hspi2.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   hspi2.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi2.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
-  hspi2.Init.IOSwap = SPI_IO_SWAP_DISABLE;
+  hspi2.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_ENABLE;
+  hspi2.Init.IOSwap = SPI_IO_SWAP_ENABLE;
   if (HAL_SPI_Init(&hspi2) != HAL_OK)
   {
     Error_Handler();
@@ -546,8 +499,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
+  /*Configure GPIO pin Output Level (CS do BMI323 em repouso = alto) */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
   /*Configure GPIO pin : PE3 */
   GPIO_InitStruct.Pin = GPIO_PIN_3;
@@ -562,13 +515,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
   /*Configure GPIO pin : PC10 */
   GPIO_InitStruct.Pin = GPIO_PIN_10;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -576,6 +522,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB12 (CS do BMI323, controlado manualmente) */
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
